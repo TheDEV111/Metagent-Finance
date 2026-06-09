@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String        @id @default(cuid())
+  walletAddress String        @unique
+  masterContext Json?
+  createdAt     DateTime      @default(now())
+  trades        TradeIntent[]
+}
+
+model TradeIntent {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  cioPromptJson  Json
+  subDelegateKey String
+  subContext     Json
+  relayerTaskId  String?
+  status         TradeStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+enum TradeStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  REVERTED
+}

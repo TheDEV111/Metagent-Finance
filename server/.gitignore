@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.env
+.CLAUDE.md
+/src/generated/prisma

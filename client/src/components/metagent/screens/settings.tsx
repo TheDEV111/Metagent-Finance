@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Icon, Panel, PanelHead, Label, Tag, Btn, MonoAddr } from "../primitives";
-import * as D from "@/lib/data";
 
 export function Settings() {
   const [tab, setTab] = useState("ai");
@@ -139,24 +138,20 @@ export function Settings() {
               />
               <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
                 {[
-                  ["Fee collector", D.relayer.feeCollector],
-                  ["Target address", D.relayer.targetAddress],
-                  ["Min fee", D.relayer.minFee],
-                  ["Avg gas price", D.relayer.gasPrice],
+                  ["Provider", "1Shot Relayer"],
+                  ["Standard", "ERC-7710 / EIP-7715"],
+                  ["Min fee", "$0.18"],
+                  ["Gas abstraction", "x402 protocol"],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between border-b border-outline-variant/10 pb-3">
                     <span className="font-data-sm text-data-sm text-on-surface-variant">{k}</span>
-                    {k.includes("address") || k.includes("collector") ? (
-                      <MonoAddr>{v}</MonoAddr>
-                    ) : (
-                      <span className="font-data-sm text-data-sm text-on-surface">{v}</span>
-                    )}
+                    <span className="font-data-sm text-data-sm text-on-surface">{v}</span>
                   </div>
                 ))}
               </div>
               <Label className="mt-6 mb-2">Supported settlement tokens</Label>
               <div className="flex gap-2 flex-wrap">
-                {D.relayer.supported.map((s) => (
+                {["USDC", "WETH", "crvUSD"].map((s) => (
                   <Tag key={s}>
                     <span className="text-on-surface">{s}</span>
                   </Tag>

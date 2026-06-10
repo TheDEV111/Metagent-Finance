@@ -7,6 +7,7 @@ import {
   estimateTransaction,
   sendTransaction,
   serializeJson,
+  getFeeData,
 } from "../services/relayer";
 
 const router = Router();
@@ -27,11 +28,17 @@ router.post("/users", async (req: Request, res: Response) => {
     const toJsonValue = (v: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull =>
       v !== null && v !== undefined ? (v as Prisma.InputJsonValue) : Prisma.DbNull;
 
-    const user = await db.user.upsert({
-      where: { walletAddress },
-      update: masterContext !== undefined ? { masterContext: toJsonValue(masterContext) } : {},
-      create: { walletAddress, masterContext: toJsonValue(masterContext) },
-    });
+    const existing = await db.user.findUnique({ where: { walletAddress } });
+    const user = existing
+      ? masterContext !== undefined
+        ? await db.user.update({
+            where: { walletAddress },
+            data: { masterContext: toJsonValue(masterContext) },
+          })
+        : existing
+      : await db.user.create({
+          data: { walletAddress, masterContext: toJsonValue(masterContext) },
+        });
 
     res.json(user);
   } catch (err) {
@@ -72,18 +79,35 @@ router.post("/trade", async (req: Request, res: Response) => {
       burner
     );
 
-    // Phase 3 — estimate then submit to 1Shot relayer
+    // Phase 3 — get locked fee quote then estimate
+    const feeData = await getFeeData();
+
+    const txs = [{ to: intent.router, data: "0x" as const, value: "0" }];
+
     const estimate = await estimateTransaction({
       delegation: subDelegation.signedDelegation,
-      transactions: [{ to: intent.router, data: "0x", value: "0" }],
+      transactions: txs,
+      feeContext: feeData.context,
     });
 
-    const send = await sendTransaction({
-      delegation: subDelegation.signedDelegation,
-      transactions: [{ to: intent.router, data: "0x", value: "0" }],
-      context: estimate.context,
-      ...(webhookUrl && { destinationUrl: webhookUrl }),
-    });
+    // Only submit to relayer when the estimate succeeded.
+    // estimate.success is false when using ROOT_AUTHORITY (no real wallet_grantPermissions
+    // context yet). In that case we still persist the intent as PENDING so the UI can show it.
+    let relayerTaskId: string | null = null;
+    let tradeStatus: "SUBMITTED" | "PENDING" = "PENDING";
+
+    if (estimate.success && estimate.context) {
+      const send = await sendTransaction({
+        delegation: subDelegation.signedDelegation,
+        transactions: txs,
+        context: estimate.context,
+        ...(webhookUrl && { destinationUrl: webhookUrl }),
+      });
+      relayerTaskId = send.taskId;
+      tradeStatus = "SUBMITTED";
+    } else {
+      console.log("[POST /api/trade] estimate.success=false — saving as PENDING (no real permission context yet)");
+    }
 
     // Persist to DB
     const trade = await db.tradeIntent.create({
@@ -92,12 +116,12 @@ router.post("/trade", async (req: Request, res: Response) => {
         cioPromptJson: intent as unknown as Prisma.InputJsonValue,
         subDelegateKey: burner.privateKey,
         subContext: JSON.parse(serializeJson(subDelegation.signedDelegation)) as Prisma.InputJsonValue,
-        relayerTaskId: send.taskId,
-        status: "SUBMITTED",
+        relayerTaskId,
+        status: tradeStatus,
       },
     });
 
-    res.json({ tradeId: trade.id, taskId: send.taskId, intent });
+    res.json({ tradeId: trade.id, taskId: relayerTaskId ?? trade.id, intent });
   } catch (err) {
     console.error("[POST /api/trade]", err);
     res.status(500).json({ error: String(err) });

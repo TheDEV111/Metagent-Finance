@@ -1,16 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useConnection } from "wagmi";
 import { Icon, Panel, PanelHead, Label, Tag, Btn, IconBtn, MonoAddr, Modal } from "../primitives";
-import { Bar } from "../charts";
-import * as D from "@/lib/data";
+import { fmtUSD } from "@/lib/data";
 
 export function Permissions({ openGrant }: { openGrant: () => void }) {
-  const t = D.treasury;
-  const usedPct = Math.round((t.masterUsed / t.masterBudget) * 100);
-  const totalDelegated = D.burnerKeys
-    .filter((k) => k.status === "active")
-    .reduce((s, k) => s + k.limit, 0);
+  const { address } = useConnection();
+  const shortAddr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—";
 
   return (
     <div className="space-y-gutter">
@@ -39,27 +36,24 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
               live
               right={<Tag>ERC-7715</Tag>}
             />
-            <div className="flex justify-between font-data-sm text-data-sm mb-2">
-              <span className="text-on-surface">Budget consumed</span>
-              <span className="text-primary-container">
-                {usedPct}% · {D.fmtUSD(t.masterUsed)} of {D.fmtUSD(t.masterBudget)}
-              </span>
-            </div>
-            <Bar pct={usedPct} h="h-1.5" shimmer />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-              {[["Token", "USDC"], ["Network", "Base"], ["Period", "Monthly"], ["Resets", "in 12d"]].map(([l, v]) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+              {[["Token", "USDC"], ["Network", "Base"], ["Period", "Monthly"], ["Standard", "ERC-7715"]].map(([l, v]) => (
                 <div key={l}>
                   <Label className="mb-1.5 normal-case">{l}</Label>
                   <div className="font-data-sm text-data-sm text-on-surface">{v}</div>
                 </div>
               ))}
             </div>
+            <p className="font-data-sm text-[12px] text-on-surface-variant mt-5 flex items-center gap-1.5">
+              <Icon name="info" className="text-[14px]" />
+              Budget tracking activates once the delegation manager confirms the context on-chain.
+            </p>
           </div>
           <div className="lg:col-span-5 lg:border-l border-outline-variant/15 lg:pl-8 space-y-4">
             <Label>Permission Context</Label>
             <div className="bg-surface-container-lowest/70 border border-outline-variant/15 rounded-lg p-3 font-data-sm text-[12px] text-on-surface-variant space-y-1.5">
               {[
-                ["delegator", D.user.address],
+                ["delegator", address ? shortAddr : "—"],
                 ["delegate", "0xDeleg…7710"],
                 ["scope", "Erc20Periodic"],
                 ["enforcer", "AllowedTargets"],
@@ -81,10 +75,10 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
       {/* Allocation summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-gutter">
         {[
-          { l: "Active Delegations", v: "4", icon: "key", c: "text-on-surface" },
-          { l: "Total Delegated", v: D.fmtUSD(totalDelegated), icon: "savings", c: "text-on-surface" },
-          { l: "Spent this period", v: D.fmtUSD(t.masterUsed), icon: "payments", c: "text-primary" },
-          { l: "Headroom", v: D.fmtUSD(t.masterBudget - t.masterUsed), icon: "data_usage", c: "text-emerald" },
+          { l: "Active Delegations", v: "0", icon: "key", c: "text-on-surface" },
+          { l: "Total Delegated", v: "$0", icon: "savings", c: "text-on-surface" },
+          { l: "Spent this period", v: "$0", icon: "payments", c: "text-primary" },
+          { l: "Headroom", v: "—", icon: "data_usage", c: "text-emerald" },
         ].map((k) => (
           <Panel key={k.l} className="p-5">
             <div className="flex items-center justify-between">
@@ -105,74 +99,18 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
               Burner keys bound by caveat · ERC-7710 redelegatePermissionContext
             </p>
           </div>
-          <Tag>5 KEYS</Tag>
+          <Tag>0 KEYS</Tag>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-outline-variant/20 bg-surface-container-lowest/50 font-label-caps text-label-caps text-on-surface-variant">
-                <th className="p-4 font-normal">Agent / Burner Key</th>
-                <th className="p-4 font-normal">Allowed Target</th>
-                <th className="p-4 font-normal">Caveat</th>
-                <th className="p-4 font-normal w-48">Spent / Limit</th>
-                <th className="p-4 font-normal">Expires</th>
-                <th className="p-4 font-normal text-right">State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {D.burnerKeys.map((k, i) => {
-                const pct = Math.round((k.used / k.limit) * 100);
-                const revoked = k.status === "revoked";
-                return (
-                  <tr
-                    key={i}
-                    className={
-                      "border-b border-outline-variant/10 transition-colors " +
-                      (revoked ? "opacity-50" : "hover:bg-surface-container-high/30")
-                    }
-                  >
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded bg-surface-container flex items-center justify-center border border-outline-variant/20">
-                          <Icon name={k.icon} className="text-[15px] text-secondary-fixed-dim" />
-                        </span>
-                        <div>
-                          <div className="font-data-sm text-data-sm text-on-surface">{k.agent}</div>
-                          <div className="font-data-sm text-[12px] text-on-surface-variant">{k.address}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 font-data-sm text-data-sm text-on-surface-variant">{k.target}</td>
-                    <td className="p-4">
-                      <span className="font-data-sm text-[12px] text-tertiary-fixed-dim bg-tertiary-fixed-dim/10 px-2 py-1 rounded border border-tertiary-fixed-dim/20">
-                        {k.scope}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex justify-between font-data-sm text-[12px] mb-1.5 tabular">
-                        <span className="text-on-surface">{D.fmtUSD(k.used)}</span>
-                        <span className="text-on-surface-variant">{D.fmtUSD(k.limit)}</span>
-                      </div>
-                      <Bar
-                        pct={pct}
-                        color={revoked ? "bg-error" : pct >= 100 ? "bg-amber" : "bg-primary-container"}
-                      />
-                    </td>
-                    <td className="p-4 font-data-sm text-data-sm text-on-surface-variant">{k.expires}</td>
-                    <td className="p-4 text-right">
-                      {revoked ? (
-                        <span className="font-label-caps text-label-caps text-error">REVOKED</span>
-                      ) : (
-                        <button className="font-label-caps text-label-caps text-on-surface-variant hover:text-error transition-colors">
-                          REVOKE
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Icon name="vpn_key" className="text-[44px] text-on-surface-variant/30 mb-3" />
+          <p className="font-data-sm text-data-sm text-on-surface-variant">No burner keys deployed yet.</p>
+          <p className="font-data-sm text-[12px] text-outline mt-1 max-w-sm">
+            Run the CIO Agent to generate a trade intent — each intent provisions a fresh burner key
+            via <span className="text-on-surface">redelegatePermissionContext</span>.
+          </p>
+          <Btn variant="ghost" icon="add_moderator" className="mt-5" onClick={openGrant}>
+            Create Sub-Delegation
+          </Btn>
         </div>
       </Panel>
     </div>

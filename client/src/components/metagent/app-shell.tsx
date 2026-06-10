@@ -9,9 +9,10 @@ import { Agents } from "./screens/agents";
 import { Activity, TxDrawer } from "./screens/activity";
 import { Permissions, GrantModal } from "./screens/permissions";
 import { Settings } from "./screens/settings";
+import { Demo } from "./screens/demo";
 import * as D from "@/lib/data";
 
-type Route = "dashboard" | "portfolio" | "agents" | "permissions" | "activity" | "settings";
+type Route = "dashboard" | "portfolio" | "agents" | "permissions" | "activity" | "settings" | "demo";
 type TxItem = typeof D.activity[0];
 
 const NAV: Array<[Route, string, string]> = [
@@ -21,6 +22,7 @@ const NAV: Array<[Route, string, string]> = [
   ["permissions", "Permissions", "key"],
   ["activity", "Activity", "receipt_long"],
   ["settings", "Settings", "settings"],
+  ["demo", "Demo", "science"],
 ];
 
 const TITLES: Record<Route, string> = {
@@ -30,11 +32,13 @@ const TITLES: Record<Route, string> = {
   permissions: "Permissions",
   activity: "Activity",
   settings: "Settings",
+  demo: "Demo",
 };
 
 export function MetagentApp() {
   const [connected, setConnected] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [route, setRoute] = useState<Route>("dashboard");
   const [tx, setTx] = useState<TxItem | null>(null);
   const [grant, setGrant] = useState(false);
@@ -48,6 +52,7 @@ export function MetagentApp() {
         const s = JSON.parse(saved);
         if (s.connected) setConnected(true);
         if (s.userId) setUserId(s.userId);
+        if (s.walletAddress) setWalletAddress(s.walletAddress);
         if (s.route) setRoute(s.route as Route);
       }
     } catch {}
@@ -55,7 +60,7 @@ export function MetagentApp() {
 
   useEffect(() => {
     try {
-      localStorage.setItem("mg_state", JSON.stringify({ connected, userId, route }));
+      localStorage.setItem("mg_state", JSON.stringify({ connected, userId, walletAddress, route }));
     } catch {}
   }, [connected, userId, route]);
 
@@ -66,7 +71,7 @@ export function MetagentApp() {
   };
 
   if (!connected) {
-    return <Onboarding onComplete={(uid) => { setUserId(uid); setConnected(true); }} />;
+    return <Onboarding onComplete={(uid, addr) => { setUserId(uid); setWalletAddress(addr); setConnected(true); }} />;
   }
 
   return (
@@ -129,7 +134,7 @@ export function MetagentApp() {
             <div className="font-data-sm text-[12px] text-on-surface-variant">5 agents · Base Mainnet</div>
           </div>
           <button
-            onClick={() => { setConnected(false); localStorage.removeItem("mg_state"); }}
+            onClick={() => { setConnected(false); setUserId(null); setWalletAddress(null); localStorage.removeItem("mg_state"); }}
             className="w-full bg-primary-container text-on-primary-container font-label-caps text-label-caps py-3 rounded font-bold flex justify-center items-center gap-2 hover:bg-primary-fixed transition-colors"
           >
             <Icon name="logout" className="text-[16px]" />
@@ -177,7 +182,6 @@ export function MetagentApp() {
             <div className="relative">
               <IconBtn
                 name="notifications"
-                badge
                 active={notifOpen}
                 onClick={() => setNotifOpen((v) => !v)}
               />
@@ -192,7 +196,7 @@ export function MetagentApp() {
                 <Icon name="person" className="text-primary-fixed-dim text-[18px]" />
               </span>
               <span className="font-data-sm text-data-sm text-on-surface hidden sm:block">
-                {D.user.address}
+                {walletAddress ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}` : "—"}
               </span>
             </button>
           </div>
@@ -204,12 +208,13 @@ export function MetagentApp() {
           onClick={() => notifOpen && setNotifOpen(false)}
         >
           <div key={route} className="fade-up">
-            {route === "dashboard" && <Dashboard nav={nav} openTx={(t) => setTx(t)} userId={userId} />}
-            {route === "portfolio" && <Portfolio nav={nav} />}
-            {route === "agents" && <Agents nav={nav} openTx={(t) => setTx(t)} />}
+            {route === "dashboard" && <Dashboard nav={nav} openTx={(t) => setTx(t)} userId={userId} walletAddress={walletAddress} />}
+            {route === "portfolio" && <Portfolio nav={nav} walletAddress={walletAddress} />}
+            {route === "agents" && <Agents nav={nav} userId={userId} />}
             {route === "permissions" && <Permissions openGrant={() => setGrant(true)} />}
             {route === "activity" && <Activity openTx={(t) => setTx(t)} userId={userId} />}
             {route === "settings" && <Settings />}
+            {route === "demo" && <Demo />}
           </div>
         </main>
       </div>
@@ -220,13 +225,6 @@ export function MetagentApp() {
   );
 }
 
-const NOTIF_COLOR_MAP: Record<string, string> = {
-  "primary-container": "text-primary-container",
-  "amber": "text-amber",
-  "secondary-fixed-dim": "text-secondary-fixed-dim",
-  "error": "text-error",
-};
-
 function NotifDropdown({ onClose }: { onClose: () => void }) {
   return (
     <div
@@ -236,35 +234,18 @@ function NotifDropdown({ onClose }: { onClose: () => void }) {
     >
       <div className="p-4 border-b border-outline-variant/15 flex items-center justify-between">
         <h4 className="font-data-lg text-data-lg text-on-surface">Notifications</h4>
-        <span className="font-label-caps text-label-caps text-primary-container">4 NEW</span>
+        <span className="font-label-caps text-label-caps text-on-surface-variant">0 NEW</span>
       </div>
-      <div className="max-h-80 overflow-y-auto">
-        {D.notifications.map((n, i) => (
-          <div
-            key={i}
-            className="flex gap-3 p-4 border-b border-outline-variant/10 hover:bg-surface-container-high/30 transition-colors"
-          >
-            <span
-              className={
-                "w-8 h-8 rounded bg-surface-container flex items-center justify-center border border-outline-variant/20 shrink-0 " +
-                (NOTIF_COLOR_MAP[n.color] || "text-on-surface-variant")
-              }
-            >
-              <Icon name={n.icon} className="text-[16px]" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="font-data-sm text-data-sm text-on-surface">{n.title}</div>
-              <div className="font-data-sm text-[12px] text-on-surface-variant truncate">{n.text}</div>
-            </div>
-            <span className="font-data-sm text-[11px] text-outline shrink-0">{n.time}</span>
-          </div>
-        ))}
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <Icon name="notifications_none" className="text-[32px] text-on-surface-variant/30 mb-2" />
+        <p className="font-data-sm text-[12px] text-outline">No notifications yet.</p>
+        <p className="font-data-sm text-[11px] text-outline mt-1">Agent confirmations and decisions will appear here.</p>
       </div>
       <button
         onClick={onClose}
-        className="w-full p-3 font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/30 transition-colors"
+        className="w-full p-3 font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/30 transition-colors border-t border-outline-variant/10"
       >
-        MARK ALL READ
+        CLOSE
       </button>
     </div>
   );

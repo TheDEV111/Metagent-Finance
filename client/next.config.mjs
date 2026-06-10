@@ -7,6 +7,7 @@ const nextConfig = {
       ...config.resolve.alias,
       "porto/internal": false,
       "@base-org/account": false,
+      "pino-pretty": false,
     };
     return config;
   },

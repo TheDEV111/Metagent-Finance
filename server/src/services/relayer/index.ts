@@ -84,12 +84,18 @@ export async function estimateTransaction(params: {
   chainId?: string;
   delegation: SignedDelegation;
   transactions: { to: Hex; data: Hex; value?: string }[];
+  feeToken?: Hex;
+  feeContext?: string; // locked fee quote from getFeeData
 }): Promise<OneShotEstimateResult> {
   const permissionContext = encodePermissionContext(params.delegation);
+  const from = params.delegation.delegate;
 
   return rpcCall<OneShotEstimateResult>("relayer_estimate7710Transaction", {
     chainId: params.chainId ?? BASE_CHAIN_ID,
+    feeToken: params.feeToken ?? USDC_BASE,
+    ...(params.feeContext && { context: params.feeContext }),
     transactions: params.transactions.map((tx) => ({
+      from,
       ...tx,
       permissionContext,
     })),
@@ -101,17 +107,21 @@ export async function sendTransaction(params: {
   delegation: SignedDelegation;
   transactions: { to: Hex; data: Hex; value?: string }[];
   context: string; // price-locked context from estimateTransaction result
+  feeToken?: Hex;
   destinationUrl?: string; // webhook
 }): Promise<OneShotSendResult> {
   const permissionContext = encodePermissionContext(params.delegation);
+  const from = params.delegation.delegate;
 
   return rpcCall<OneShotSendResult>("relayer_send7710Transaction", {
     chainId: params.chainId ?? BASE_CHAIN_ID,
+    feeToken: params.feeToken ?? USDC_BASE,
+    context: params.context,
     transactions: params.transactions.map((tx) => ({
+      from,
       ...tx,
       permissionContext,
     })),
-    context: params.context,
     ...(params.destinationUrl && { destinationUrl: params.destinationUrl }),
   });
 }

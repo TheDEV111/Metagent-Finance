@@ -1,20 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useConnect, useAccount, useWalletClient } from "wagmi";
-import { metaMask } from "@wagmi/connectors";
+import { useConnect, useConnection, useWalletClient, useConnectors, useDisconnect } from "wagmi";
 import { Icon, Label, Btn, Tag } from "../primitives";
 import { upsertUser } from "@/lib/api";
 
-export function Onboarding({ onComplete }: { onComplete: (userId: string) => void }) {
+export function Onboarding({ onComplete }: { onComplete: (userId: string, walletAddress: string) => void }) {
   const [step, setStep] = useState(0);
   const [budget, setBudget] = useState(1000000);
   const [period, setPeriod] = useState("Monthly");
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { connect, connectors } = useConnect();
-  const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const { mutate: connect } = useConnect();
+  const { mutate: disconnect } = useDisconnect();
+  const connectors = useConnectors();
+  const { address, isConnected } = useConnection();
   const { data: walletClient } = useWalletClient();
 
   // After wallet connects, register user in DB and advance to step 1
@@ -35,9 +39,10 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string) => voi
   }, [step]);
 
   const handleGrantPermission = async () => {
-    if (!walletClient || !userId) return;
+    if (!userId) return;
     setStep(2);
     try {
+      if (!walletClient) throw new Error("wallet client not ready");
       // wallet_grantPermissions (ERC-7715) — store masterContext in DB
       const result = await walletClient.request({
         method: "wallet_grantPermissions" as never,
@@ -126,7 +131,7 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string) => voi
                 </p>
               )}
               <div className="space-y-3 mt-7 flex-1">
-                {connectors.map((connector) => (
+                {mounted && connectors.filter((c) => c.id === "metaMask" || c.name?.toLowerCase().includes("metamask")).map((connector) => (
                   <button
                     key={connector.id}
                     onClick={() => { setError(null); connect({ connector }); }}
@@ -236,7 +241,7 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string) => voi
                 </div>
               </div>
               <div className="flex gap-2 mt-6">
-                <Btn variant="ghost" icon="arrow_back" onClick={() => setStep(0)}>Back</Btn>
+                <Btn variant="ghost" icon="arrow_back" onClick={() => { disconnect(); setStep(0); setUserId(null); }}>Back</Btn>
                 <Btn className="flex-1" icon="verified_user" onClick={handleGrantPermission}>
                   Grant Permission
                 </Btn>
@@ -285,7 +290,7 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string) => voi
                 ${budget.toLocaleString("en-US")} USDC granted, {period.toLowerCase()}. The CIO Agent is
                 now monitoring markets.
               </p>
-              <Btn className="mt-8 px-8" iconEnd="arrow_forward" onClick={() => onComplete(userId!)}>
+              <Btn className="mt-8 px-8" iconEnd="arrow_forward" onClick={() => onComplete(userId!, address!)}>
                 Enter Dashboard
               </Btn>
             </div>

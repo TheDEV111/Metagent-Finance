@@ -61,7 +61,7 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
-  const allRows = [...liveTrades, ...D.activity];
+  const allRows = [...liveTrades];
   const rows = filter === "All" ? allRows : allRows.filter((a) => a.status === map[filter]);
 
   return (
@@ -79,10 +79,10 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
       {/* Relayer summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-gutter">
         {[
-          { l: "Relayer", v: D.relayer.provider, sub: D.relayer.standard, icon: "bolt", c: "text-primary" },
-          { l: "Txns sponsored", v: D.relayer.sponsored.toLocaleString(), sub: D.fmtUSD(D.relayer.sponsoredUsd, 2) + " gas", icon: "local_gas_station", c: "text-on-surface" },
-          { l: "Avg gas price", v: D.relayer.gasPrice, sub: "Base · paid in USDC", icon: "speed", c: "text-on-surface" },
-          { l: "Success rate", v: "98.4%", sub: "Last 1,000 tx", icon: "check_circle", c: "text-emerald" },
+          { l: "Relayer", v: "1Shot", sub: "ERC-7710 / EIP-7715", icon: "bolt", c: "text-primary" },
+          { l: "Agent trades", v: allRows.length.toLocaleString(), sub: "this session", icon: "local_gas_station", c: "text-on-surface" },
+          { l: "Gas abstraction", v: "x402", sub: "Base · USDC settlement", icon: "speed", c: "text-on-surface" },
+          { l: "Confirmed", v: String(allRows.filter((t) => t.status === "confirmed").length), sub: `of ${allRows.length} total`, icon: "check_circle", c: "text-emerald" },
         ].map((k) => (
           <Panel key={k.l} className="p-5">
             <div className="flex items-center justify-between">
@@ -115,6 +115,13 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
             {rows.length} txns
           </div>
         </div>
+        {rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Icon name="receipt_long" className="text-[40px] text-on-surface-variant/30 mb-3" />
+            <p className="font-data-sm text-data-sm text-on-surface-variant">No trades yet.</p>
+            <p className="font-data-sm text-[12px] text-outline mt-1">Run the CIO Agent from the Dashboard to generate your first trade intent.</p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -154,6 +161,7 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
             </tbody>
           </table>
         </div>
+        )}
       </Panel>
     </div>
   );

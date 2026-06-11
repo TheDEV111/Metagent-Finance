@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useConnect, useConnection, useWalletClient, useConnectors, useDisconnect } from "wagmi";
+import { toHex } from "viem";
 import { Icon, Label, Btn, Tag } from "../primitives";
 import { upsertUser } from "@/lib/api";
 
@@ -43,18 +44,22 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
     setStep(2);
     try {
       if (!walletClient) throw new Error("wallet client not ready");
-      // wallet_grantPermissions (ERC-7715) — store masterContext in DB
+      // wallet_grantPermissions (ERC-7715) — expiry + hex allowance required by the spec
+      const expiry = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+      const allowanceHex = toHex(BigInt(budget) * BigInt(1_000_000));
       const result = await walletClient.request({
         method: "wallet_grantPermissions" as never,
         params: [
           {
+            expiry,
             permissions: [
               {
                 type: "erc20-token-transfer",
                 data: {
                   address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                  allowance: String(budget * 1_000_000),
+                  allowance: allowanceHex,
                 },
+                policies: [],
                 required: true,
               },
             ],

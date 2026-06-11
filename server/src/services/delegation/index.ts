@@ -22,7 +22,7 @@ export function generateBurnerKey(): { privateKey: Hex; address: Hex } {
 }
 
 export async function buildSubDelegation(
-  _masterContext: unknown,
+  masterContext: unknown,
   intent: TradeIntent,
   burner: { privateKey: Hex; address: Hex }
 ): Promise<SubDelegation> {
@@ -38,19 +38,30 @@ export async function buildSubDelegation(
     })
     .build();
 
-  // In production: swap scope for parentPermissionContext from wallet_grantPermissions:
-  //   createDelegation({ ..., parentPermissionContext: _masterContext })
-  const delegation = createDelegation({
-    from: systemAddress,
-    to: burner.address,
-    caveats,
-    environment: env,
-    scope: {
-      type: ScopeType.Erc20TransferAmount,
-      tokenAddress: USDC_BASE,
-      maxAmount: parseUnits(String(intent.amount_usdc), 6),
-    },
-  });
+  // Use the real permissionsContext from wallet_grantPermissions (ERC-7715) when available.
+  // Falls back to ROOT_AUTHORITY scope when masterContext is null (estimate.success will be false).
+  const permissionsContext = (masterContext as { permissionsContext?: Hex } | null)
+    ?.permissionsContext;
+
+  const delegation = permissionsContext
+    ? createDelegation({
+        from: systemAddress,
+        to: burner.address,
+        caveats,
+        environment: env,
+        parentPermissionContext: permissionsContext,
+      })
+    : createDelegation({
+        from: systemAddress,
+        to: burner.address,
+        caveats,
+        environment: env,
+        scope: {
+          type: ScopeType.Erc20TransferAmount,
+          tokenAddress: USDC_BASE,
+          maxAmount: parseUnits(String(intent.amount_usdc), 6),
+        },
+      });
 
   const signature = await signDelegation({
     privateKey: systemPrivateKey,

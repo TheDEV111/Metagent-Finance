@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../lib/db";
 import { getCIOTradeIntent } from "../services/ai/cio";
+import { getSwapExecution, buildSwapCalldata } from "../services/ai/swap";
 import { generateBurnerKey, buildSubDelegation } from "../services/delegation";
 import {
   estimateTransaction,
@@ -79,10 +80,15 @@ router.post("/trade", async (req: Request, res: Response) => {
       burner
     );
 
+    // Phase 2b — Swap Agent: determines execution params, builds real calldata
+    const swapExecution = await getSwapExecution(intent);
+    console.log(`[POST /api/trade] SWAP AGENT: slippage=${swapExecution.slippageBps}bps · ${swapExecution.reasoning}`);
+    const calldata = buildSwapCalldata(intent, user.walletAddress as `0x${string}`);
+
     // Phase 3 — get locked fee quote then estimate
     const feeData = await getFeeData();
 
-    const txs = [{ to: intent.router, data: "0x" as const, value: "0" }];
+    const txs = [{ to: intent.router, data: calldata, value: "0" }];
 
     const estimate = await estimateTransaction({
       delegation: subDelegation.signedDelegation,
@@ -90,13 +96,13 @@ router.post("/trade", async (req: Request, res: Response) => {
       feeContext: feeData.context,
     });
 
-    // Only submit to relayer when the estimate succeeded.
-    // estimate.success is false when using ROOT_AUTHORITY (no real wallet_grantPermissions
-    // context yet). In that case we still persist the intent as PENDING so the UI can show it.
+    const demoMode = process.env.DEMO_MODE === "true";
+
     let relayerTaskId: string | null = null;
     let tradeStatus: "SUBMITTED" | "PENDING" = "PENDING";
 
     if (estimate.success && estimate.context) {
+      // Real on-chain path — requires wallet_grantPermissions + USDC
       const send = await sendTransaction({
         delegation: subDelegation.signedDelegation,
         transactions: txs,
@@ -105,6 +111,11 @@ router.post("/trade", async (req: Request, res: Response) => {
       });
       relayerTaskId = send.taskId;
       tradeStatus = "SUBMITTED";
+    } else if (demoMode) {
+      // Demo path — simulate a submitted task so the UI shows the full flow
+      relayerTaskId = `demo_${Date.now()}`;
+      tradeStatus = "SUBMITTED";
+      console.log(`[POST /api/trade] DEMO MODE — simulating submission · task ${relayerTaskId}`);
     } else {
       console.log("[POST /api/trade] estimate.success=false — saving as PENDING (no real permission context yet)");
     }
@@ -120,6 +131,15 @@ router.post("/trade", async (req: Request, res: Response) => {
         status: tradeStatus,
       },
     });
+
+    // Demo mode: auto-confirm after 5 s to simulate the 1Shot webhook firing
+    if (demoMode && tradeStatus === "SUBMITTED") {
+      setTimeout(() => {
+        db.tradeIntent.update({ where: { id: trade.id }, data: { status: "CONFIRMED" } })
+          .then(() => console.log(`[DEMO] trade ${trade.id} auto-confirmed`))
+          .catch((e: unknown) => console.error("[DEMO] auto-confirm failed", e));
+      }, 5000);
+    }
 
     res.json({ tradeId: trade.id, taskId: relayerTaskId ?? trade.id, intent });
   } catch (err) {

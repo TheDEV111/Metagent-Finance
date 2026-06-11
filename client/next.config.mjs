@@ -11,8 +11,8 @@ const nextConfig = {
       "pino-pretty": false,
       "@safe-global/safe-apps-provider": false,
       "@safe-global/safe-apps-sdk": false,
-      "@coinbase/wallet-sdk": false,
       "@metamask/connect-evm": false,
+      "@coinbase/wallet-sdk": false,
       "@walletconnect/ethereum-provider": false,
       "accounts": false,
     };

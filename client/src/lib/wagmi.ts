@@ -1,10 +1,10 @@
 import { createConfig, http } from "wagmi";
 import { base } from "wagmi/chains";
-import { metaMask } from "@wagmi/connectors";
+import { injected } from "@wagmi/connectors";
 
 export const wagmiConfig = createConfig({
   chains: [base],
-  connectors: [metaMask()],
+  connectors: [injected({ target: "metaMask" })],
   transports: {
     [base.id]: http(),
   },

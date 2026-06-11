@@ -6,8 +6,15 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       "porto/internal": false,
+      "porto": false,
       "@base-org/account": false,
       "pino-pretty": false,
+      "@safe-global/safe-apps-provider": false,
+      "@safe-global/safe-apps-sdk": false,
+      "@coinbase/wallet-sdk": false,
+      "@metamask/connect-evm": false,
+      "@walletconnect/ethereum-provider": false,
+      "accounts": false,
     };
     return config;
   },

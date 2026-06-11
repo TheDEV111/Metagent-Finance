@@ -43,12 +43,11 @@ export function Dashboard({
   nav,
   openTx,
   userId,
-  walletAddress,
 }: {
   nav: (r: string) => void;
   openTx: (tx: TxItem) => void;
   userId: string | null;
-  walletAddress: string | null;
+  walletAddress?: string | null;
 }) {
   const { address } = useConnection();
   const addr = address as Address | undefined;

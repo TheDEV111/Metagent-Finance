@@ -9,7 +9,7 @@ import { fmtUSD } from "@/lib/data";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
 
-export function Portfolio({ nav, walletAddress }: { nav: (r: string) => void; walletAddress: string | null }) {
+export function Portfolio({ nav }: { nav: (r: string) => void; walletAddress?: string | null }) {
   const { address } = useConnection();
   const addr = address as Address | undefined;
 

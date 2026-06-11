@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Icon, Panel, PanelHead, Label, Tag, Btn, TxStatus, RouteCell, MonoAddr, AgentStatus,
+  Icon, Panel, PanelHead, Label, Tag, TxStatus, RouteCell, AgentStatus,
 } from "../primitives";
 import { AreaChart, Donut, Bar } from "../charts";
 import * as D from "@/lib/data";

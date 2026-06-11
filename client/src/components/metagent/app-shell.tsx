@@ -49,7 +49,9 @@ export function MetagentApp() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem("mg_state");
-      if (saved) {
+      const token = localStorage.getItem("mg_token");
+      if (saved && token) {
+        // Only restore connected state when a session token exists
         const s = JSON.parse(saved);
         if (s.connected) setConnected(true);
         if (s.userId) setUserId(s.userId);

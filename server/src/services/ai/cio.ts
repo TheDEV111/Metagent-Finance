@@ -1,10 +1,27 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import type { TradeIntent } from "../../contracts";
 
 const UNISWAP_V3_ROUTER = "0x2626664c2603336E57B271c5C0b26F421741e481";
 
-// CIO uses the larger reasoning model — strategic decision making
+// Allowlisted router addresses — compared case-insensitively so AI casing variation doesn't break validation
+const ALLOWED_ROUTERS = new Set([UNISWAP_V3_ROUTER.toLowerCase()]);
+
 const CIO_MODEL = "llama-3.3-70b";
+
+const TradeIntentSchema = z.object({
+  target: z.string().min(1).max(10),
+  amount_usdc: z
+    .number()
+    .finite()
+    .positive()
+    .min(10, "amount_usdc must be at least 10")
+    .max(1000, "amount_usdc must be at most 1000"),
+  router: z.string().refine(
+    (r) => ALLOWED_ROUTERS.has(r.toLowerCase()),
+    { message: "Router address not in allowed list" }
+  ),
+});
 
 export function createAIClient(): OpenAI {
   return new OpenAI({
@@ -33,13 +50,11 @@ async function fetchMarketSnapshot(): Promise<MarketSnapshot | null> {
     };
     const ethPrice = data.ethereum?.usd;
     const btcPrice = data.bitcoin?.usd;
-    if (!ethPrice || !btcPrice) return null;
-    return {
-      ethPrice,
-      eth24hChange: data.ethereum?.usd_24h_change ?? 0,
-      btcPrice,
-      btc24hChange: data.bitcoin?.usd_24h_change ?? 0,
-    };
+    if (typeof ethPrice !== "number" || typeof btcPrice !== "number") return null;
+    const eth24hChange = data.ethereum?.usd_24h_change;
+    const btc24hChange = data.bitcoin?.usd_24h_change;
+    if (typeof eth24hChange !== "number" || typeof btc24hChange !== "number") return null;
+    return { ethPrice, eth24hChange, btcPrice, btc24hChange };
   } catch {
     return null;
   }
@@ -68,7 +83,7 @@ export async function getCIOTradeIntent(
 
   if (market) {
     console.log(
-      `[CIO] Market snapshot — ETH: $${market.ethPrice.toFixed(2)} (${market.eth24hChange >= 0 ? "+" : ""}${market.eth24hChange.toFixed(2)}%) · BTC: $${market.btcPrice.toFixed(2)} (${market.btc24hChange >= 0 ? "+" : ""}${market.btc24hChange.toFixed(2)}%)`
+      `[CIO] ETH: $${market.ethPrice.toFixed(2)} (${market.eth24hChange >= 0 ? "+" : ""}${market.eth24hChange.toFixed(2)}%) · BTC: $${market.btcPrice.toFixed(2)} (${market.btc24hChange >= 0 ? "+" : ""}${market.btc24hChange.toFixed(2)}%)`
     );
   } else {
     console.warn("[CIO] Market data unavailable — using conservative defaults");
@@ -83,11 +98,19 @@ export async function getCIOTradeIntent(
   if (!raw) throw new Error("CIO Agent returned empty response");
 
   const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  const parsed = JSON.parse(jsonStr) as TradeIntent;
 
-  if (!parsed.target || !parsed.amount_usdc || !parsed.router) {
-    throw new Error(`CIO Agent returned malformed intent: ${raw}`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    throw new Error(`CIO Agent returned non-JSON: ${raw.slice(0, 200)}`);
   }
 
-  return parsed;
+  // Validate schema, ranges, and router allowlist
+  const result = TradeIntentSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`CIO Agent response failed validation: ${result.error.message}`);
+  }
+
+  return result.data as TradeIntent;
 }

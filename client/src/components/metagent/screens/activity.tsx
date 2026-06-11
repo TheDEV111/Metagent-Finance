@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Icon, Panel, Label, Btn, IconBtn, TxStatus, MonoAddr, RouteCell } from "../primitives";
 import * as D from "@/lib/data";
 import { fetchTrades, type LiveTrade } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
 
 type TxItem = typeof D.activity[0];
 
@@ -63,16 +62,13 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
     fetchTrades(userId).then((trades) => setLiveTrades(trades.map(liveToRow))).catch(() => {});
   }, [userId]);
 
-  // Supabase real-time subscription
+  // Poll for trade status updates every 5 seconds
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel("trade-status")
-      .on("postgres_changes", { event: "*", schema: "public", table: "TradeIntent" }, () => {
-        fetchTrades(userId).then((trades) => setLiveTrades(trades.map(liveToRow))).catch(() => {});
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(() => {
+      fetchTrades(userId).then((trades) => setLiveTrades(trades.map(liveToRow))).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, [userId]);
 
   const allRows = [...liveTrades];

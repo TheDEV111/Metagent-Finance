@@ -62,7 +62,13 @@ export async function getSwapExecution(
   if (!raw) throw new Error("Swap Agent returned empty response");
 
   const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  const parsed = JSON.parse(jsonStr) as SwapExecution;
+
+  let parsed: SwapExecution;
+  try {
+    parsed = JSON.parse(jsonStr) as SwapExecution;
+  } catch {
+    throw new Error(`Swap Agent returned non-JSON: ${raw.slice(0, 200)}`);
+  }
 
   if (typeof parsed.slippageBps !== "number" || !parsed.reasoning) {
     throw new Error(`Swap Agent returned malformed execution: ${raw}`);

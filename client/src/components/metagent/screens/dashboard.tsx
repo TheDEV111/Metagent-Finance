@@ -6,7 +6,6 @@ import { base } from "wagmi/chains";
 import { type Address, formatUnits } from "viem";
 import { Icon, Panel, PanelHead, Label, Tag, Btn, IconBtn, TxStatus, RouteCell } from "../primitives";
 import { fetchTrades, triggerTrade, type LiveTrade } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
 import { fmtUSD } from "@/lib/data";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
@@ -74,15 +73,13 @@ export function Dashboard({
     fetchTrades(userId).then((t) => setTrades(t.map(liveToRow))).catch(() => {});
   }, [userId]);
 
+  // Poll for trade updates every 5 seconds
   useEffect(() => {
     if (!userId) return;
-    const ch = supabase
-      .channel("dash-trades")
-      .on("postgres_changes", { event: "*", schema: "public", table: "TradeIntent" }, () => {
-        fetchTrades(userId).then((t) => setTrades(t.map(liveToRow))).catch(() => {});
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const interval = setInterval(() => {
+      fetchTrades(userId).then((t) => setTrades(t.map(liveToRow))).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, [userId]);
 
   const ethFmt = ethFormatted !== null ? ethFormatted.toFixed(4) + " ETH" : addr ? "…" : "0.0000 ETH";

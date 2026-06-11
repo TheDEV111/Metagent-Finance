@@ -10,6 +10,7 @@ datasource db {
 model User {
   id            String        @id @default(cuid())
   walletAddress String        @unique
+  sessionToken  String?       @unique
   masterContext Json?
   treasuryName  String?
   email         String?
@@ -20,16 +21,16 @@ model User {
 }
 
 model TradeIntent {
-  id             String      @id @default(cuid())
-  userId         String
-  user           User        @relation(fields: [userId], references: [id])
-  cioPromptJson  Json
-  subDelegateKey String
-  subContext     Json
-  relayerTaskId  String?
-  status         TradeStatus @default(PENDING)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  cioPromptJson Json
+  burnerAddress String?
+  subContext    Json
+  relayerTaskId String?
+  status        TradeStatus @default(PENDING)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 enum TradeStatus {

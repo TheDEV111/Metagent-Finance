@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Icon, Panel, Label, Tag, Btn, IconBtn, TxStatus, MonoAddr, RouteCell } from "../primitives";
+import { Icon, Panel, Label, Btn, IconBtn, TxStatus, MonoAddr, RouteCell } from "../primitives";
 import * as D from "@/lib/data";
 import { fetchTrades, type LiveTrade } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +29,20 @@ function liveToRow(t: LiveTrade): TxItem {
     task: t.relayerTaskId ?? "—",
     gas: 0,
   };
+}
+
+function exportCSV(rows: TxItem[]) {
+  const header = "Time,Route,Agent,Task,Amount (USDC),Status\n";
+  const body = rows.map((r) =>
+    `${r.time},${r.from}→${r.to},${r.agent},${r.task},${r.amount},${r.status}`
+  ).join("\n");
+  const blob = new Blob([header + body], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `metagent-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; userId: string | null }) {
@@ -73,7 +87,7 @@ export function Activity({ openTx, userId }: { openTx: (tx: TxItem) => void; use
             Every agent execution, routed gas-abstracted through 1Shot
           </p>
         </div>
-        <Btn variant="ghost" icon="download">Export CSV</Btn>
+        <Btn variant="ghost" icon="download" onClick={() => exportCSV(allRows)}>Export CSV</Btn>
       </div>
 
       {/* Relayer summary */}
@@ -311,7 +325,19 @@ export function TxDrawer({ tx, onClose }: { tx: TxItem | null; onClose: () => vo
           </div>
 
           <div className="flex gap-2">
-            <Btn variant="ghost" className="flex-1" iconEnd="open_in_new">
+            <Btn
+              variant="ghost"
+              className="flex-1"
+              iconEnd="open_in_new"
+              onClick={() => {
+                const target = tx.tx
+                  ? `https://basescan.org/tx/${tx.tx}`
+                  : tx.task && tx.task !== "—"
+                  ? `https://basescan.org/search?q=${tx.task}`
+                  : null;
+                if (target) window.open(target, "_blank");
+              }}
+            >
               View on Basescan
             </Btn>
           </div>

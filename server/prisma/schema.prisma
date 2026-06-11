@@ -11,6 +11,10 @@ model User {
   id            String        @id @default(cuid())
   walletAddress String        @unique
   masterContext Json?
+  treasuryName  String?
+  email         String?
+  emailVerified Boolean       @default(false)
+  notifPrefs    Json?
   createdAt     DateTime      @default(now())
   trades        TradeIntent[]
 }

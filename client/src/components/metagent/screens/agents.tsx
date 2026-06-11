@@ -4,15 +4,24 @@ import { useState, useEffect } from "react";
 import { Icon, Panel, Label, Tag, Btn, AgentStatus } from "../primitives";
 import { fetchTrades } from "@/lib/api";
 
-const CIO = {
-  id: "cio",
+const CIO_AGENT = {
   name: "CIO Agent",
   role: "Chief Investment Officer",
   model: "Llama 3.3 70B",
   provider: "Venice AI",
   icon: "neurology",
-  desc: "Analyzes market data and emits strict-JSON trade intents. Delegates execution to swap agents via redelegatePermissionContext.",
-  caveats: ["Read-only market access", "Emits intents only — no signing keys"],
+  desc: "Fetches live market data (ETH/BTC prices) and reasons over conditions to emit strict-JSON trade intents. Delegates execution to the Swap Agent via ERC-7710 redelegation. Read-only — holds no signing keys.",
+  caveats: ["Read-only market access", "Emits intents only — no signing keys", "Live price feed via CoinGecko"],
+};
+
+const SWAP_AGENT = {
+  name: "Swap Agent",
+  role: "Execution Agent",
+  model: "Mistral Small 24B",
+  provider: "Venice AI",
+  icon: "swap_horiz",
+  desc: "Receives a cryptographically scoped sub-delegation from the CIO Agent. Determines slippage tolerance, constructs Uniswap V3 exactInputSingle calldata, and submits via the 1Shot gas-abstracted relayer.",
+  caveats: ["Bound by AllowedTargets caveat", "ERC20TransferAmount enforcer", "Single-use burner key per trade", "Gas sponsored by 1Shot · x402"],
 };
 
 export function Agents({ nav, userId }: { nav: (r: string) => void; userId: string | null }) {
@@ -54,13 +63,14 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
               </span>
               <div className="flex-1">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h3 className="font-headline-md text-[22px] text-on-surface">{CIO.name}</h3>
+                  <h3 className="font-headline-md text-[22px] text-on-surface">{CIO_AGENT.name}</h3>
                   <AgentStatus status="deciding" />
+                  <Tag>ORCHESTRATOR</Tag>
                 </div>
-                <p className="font-data-sm text-data-sm text-on-surface-variant mt-2 max-w-lg">{CIO.desc}</p>
+                <p className="font-data-sm text-data-sm text-on-surface-variant mt-2 max-w-lg">{CIO_AGENT.desc}</p>
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  <Tag>{CIO.model}</Tag>
-                  <Tag>{CIO.provider}</Tag>
+                  <Tag>{CIO_AGENT.model}</Tag>
+                  <Tag>{CIO_AGENT.provider}</Tag>
                 </div>
               </div>
             </div>
@@ -68,8 +78,8 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
           <div className="lg:col-span-5 grid grid-cols-3 gap-4 lg:border-l border-outline-variant/15 lg:pl-6">
             {[
               ["Intents emitted", tradeCount !== null ? tradeCount.toLocaleString() : "—"],
-              ["Confirmed", confirmedCount.toLocaleString()],
-              ["Sub-agents", "0"],
+              ["Confirmed",       confirmedCount.toLocaleString()],
+              ["Sub-agents",      "1"],
             ].map(([l, v]) => (
               <div key={l}>
                 <Label className="mb-1.5">{l}</Label>
@@ -77,12 +87,8 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
               </div>
             ))}
             <div className="col-span-3 flex gap-2 mt-1">
-              <Btn variant="ghost" className="flex-1" icon="terminal" onClick={() => nav("dashboard")}>
-                Live Log
-              </Btn>
-              <Btn variant="ghost" className="flex-1" icon="receipt_long" onClick={() => nav("activity")}>
-                Activity
-              </Btn>
+              <Btn variant="ghost" className="flex-1" icon="terminal" onClick={() => nav("dashboard")}>Live Log</Btn>
+              <Btn variant="ghost" className="flex-1" icon="receipt_long" onClick={() => nav("activity")}>Activity</Btn>
             </div>
           </div>
         </div>
@@ -93,12 +99,12 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
         <Label className="mb-4">A2A Delegation Flow · ERC-7710</Label>
         <div className="flex items-center gap-3 overflow-x-auto pb-1">
           {[
-            { i: "person", t: "Owner EOA", s: "Master budget" },
-            { i: "neurology", t: "CIO Agent", s: "Trade intent" },
-            { i: "vpn_key", t: "Caveat Builder", s: "redelegate" },
-            { i: "swap_horiz", t: "Swap Agent", s: "Burner key" },
-            { i: "bolt", t: "1Shot Relayer", s: "Gas-abstracted" },
-            { i: "check_circle", t: "Confirmed", s: "On-chain" },
+            { i: "person",       t: "Owner EOA",    s: "Master budget" },
+            { i: "neurology",    t: "CIO Agent",    s: "Trade intent" },
+            { i: "vpn_key",      t: "Caveat Builder", s: "redelegate" },
+            { i: "swap_horiz",   t: "Swap Agent",   s: "Burner key" },
+            { i: "bolt",         t: "1Shot Relayer", s: "Gas-abstracted" },
+            { i: "check_circle", t: "Confirmed",    s: "On-chain" },
           ].map((node, idx, arr) => (
             <div key={node.t} className="flex items-center gap-3">
               <div className="flex flex-col items-center text-center min-w-[88px]">
@@ -108,10 +114,7 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
                     ? "bg-primary-container/10 border-primary-container/40 neon-glow"
                     : "bg-surface-container border-outline-variant/20")
                 }>
-                  <Icon
-                    name={node.i}
-                    className={idx === arr.length - 1 ? "text-primary-fixed-dim text-[20px]" : "text-on-surface-variant text-[20px]"}
-                  />
+                  <Icon name={node.i} className={(idx === arr.length - 1 ? "text-primary-fixed-dim" : "text-on-surface-variant") + " text-[20px]"} />
                 </span>
                 <span className="font-data-sm text-[12px] text-on-surface mt-2">{node.t}</span>
                 <span className="font-data-sm text-[11px] text-outline">{node.s}</span>
@@ -124,26 +127,57 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
         </div>
       </Panel>
 
-      {/* Execution agents — empty state */}
+      {/* Execution agents */}
       <div>
         <Label className="mb-3">Execution Agents · Sub-delegates</Label>
-        <Panel className="p-10 flex flex-col items-center justify-center text-center">
-          <Icon name="smart_toy" className="text-[44px] text-on-surface-variant/30 mb-3" />
-          <p className="font-data-sm text-data-sm text-on-surface-variant">No execution agents deployed yet.</p>
-          <p className="font-data-sm text-[12px] text-outline mt-1 max-w-sm">
-            Run the CIO Agent from the Dashboard to generate a trade intent. Each intent provisions a burner-key swap agent via ERC-7710 redelegation.
-          </p>
-          <Btn variant="ghost" icon="play_arrow" className="mt-5" onClick={() => nav("dashboard")}>
-            Go to Dashboard
-          </Btn>
+        <Panel className="p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 opacity-[0.04] pointer-events-none">
+            <Icon name="swap_horiz" className="text-[140px]" />
+          </div>
+          <div className="grid lg:grid-cols-12 gap-6 relative z-10">
+            <div className="lg:col-span-7">
+              <div className="flex items-start gap-4">
+                <span className="w-12 h-12 rounded-lg bg-surface-container border border-primary-container/30 flex items-center justify-center shrink-0">
+                  <Icon name="swap_horiz" className="text-primary-fixed-dim text-[26px]" />
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="font-headline-md text-[20px] text-on-surface">{SWAP_AGENT.name}</h3>
+                    <AgentStatus status="idle" />
+                    <Tag>SUB-DELEGATE</Tag>
+                  </div>
+                  <p className="font-data-sm text-data-sm text-on-surface-variant mt-2 max-w-lg">{SWAP_AGENT.desc}</p>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    <Tag>{SWAP_AGENT.model}</Tag>
+                    <Tag>{SWAP_AGENT.provider}</Tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-5 lg:border-l border-outline-variant/15 lg:pl-6 space-y-3">
+              <Label>Caveats enforced</Label>
+              {SWAP_AGENT.caveats.map((c) => (
+                <div key={c} className="flex items-center gap-2 font-data-sm text-[12px] text-on-surface-variant">
+                  <Icon name="check_circle" className="text-emerald text-[14px] shrink-0" />
+                  {c}
+                </div>
+              ))}
+              <Btn variant="ghost" icon="receipt_long" className="mt-2 w-full" onClick={() => nav("activity")}>
+                View executions
+              </Btn>
+            </div>
+          </div>
         </Panel>
       </div>
 
-      {/* Caveats info */}
+      {/* CIO Agent caveats */}
       <Panel className="p-6">
-        <PanelHead title="CIO Agent Caveats" sub="Enforced at the delegation layer — not configurable at runtime" />
+        <div className="mb-2">
+          <h3 className="font-headline-md text-headline-md text-on-surface">CIO Agent Caveats</h3>
+          <p className="font-data-sm text-data-sm text-on-surface-variant mt-1">Enforced at the delegation layer — not configurable at runtime</p>
+        </div>
         <div className="mt-4 space-y-2">
-          {CIO.caveats.map((c) => (
+          {CIO_AGENT.caveats.map((c) => (
             <div key={c} className="flex items-center gap-3 font-data-sm text-data-sm text-on-surface-variant">
               <Icon name="check_circle" className="text-emerald text-[16px] shrink-0" />
               {c}
@@ -151,15 +185,6 @@ export function Agents({ nav, userId }: { nav: (r: string) => void; userId: stri
           ))}
         </div>
       </Panel>
-    </div>
-  );
-}
-
-function PanelHead({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="mb-2">
-      <h3 className="font-headline-md text-headline-md text-on-surface">{title}</h3>
-      {sub && <p className="font-data-sm text-data-sm text-on-surface-variant mt-1">{sub}</p>}
     </div>
   );
 }

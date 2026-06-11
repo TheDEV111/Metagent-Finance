@@ -48,6 +48,43 @@ router.post("/users", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/users/:userId — fetch user profile
+router.get("/users/:userId", async (req: Request, res: Response) => {
+  try {
+    const user = await db.user.findUnique({ where: { id: String(req.params["userId"]) } });
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    res.json(user);
+  } catch (err) {
+    console.error("[GET /api/users/:userId]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// PATCH /api/users/:userId — update profile fields
+router.patch("/users/:userId", async (req: Request, res: Response) => {
+  try {
+    const { treasuryName, email, emailVerified, notifPrefs } = req.body as {
+      treasuryName?: string;
+      email?: string;
+      emailVerified?: boolean;
+      notifPrefs?: unknown;
+    };
+    const user = await db.user.update({
+      where: { id: String(req.params["userId"]) },
+      data: {
+        ...(treasuryName !== undefined && { treasuryName }),
+        ...(email       !== undefined && { email }),
+        ...(emailVerified !== undefined && { emailVerified }),
+        ...(notifPrefs  !== undefined && { notifPrefs: notifPrefs as Prisma.InputJsonValue }),
+      },
+    });
+    res.json(user);
+  } catch (err) {
+    console.error("[PATCH /api/users/:userId]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // POST /api/trade — trigger full A2A orchestration
 router.post("/trade", async (req: Request, res: Response) => {
   try {

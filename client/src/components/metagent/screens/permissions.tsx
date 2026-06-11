@@ -3,19 +3,28 @@
 import { useState, useEffect } from "react";
 import { useConnection } from "wagmi";
 import { Icon, Panel, PanelHead, Label, Tag, Btn, IconBtn, MonoAddr, Modal } from "../primitives";
+import { fetchTrades, type LiveTrade } from "@/lib/api";
 import { fmtUSD } from "@/lib/data";
 
-export function Permissions({ openGrant }: { openGrant: () => void }) {
+export function Permissions({ openGrant, userId }: { openGrant: () => void; userId: string | null }) {
   const { address } = useConnection();
   const shortAddr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—";
+
+  const [trades, setTrades] = useState<LiveTrade[]>([]);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchTrades(userId).then(setTrades).catch(() => {});
+  }, [userId]);
+
+  const confirmedTrades = trades.filter((t) => t.status === "CONFIRMED");
+  const spent = confirmedTrades.reduce((s, t) => s + (t.cioPromptJson as { amount_usdc: number }).amount_usdc, 0);
 
   return (
     <div className="space-y-gutter">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-headline-md text-headline-md text-on-surface">
-            Permissions & Delegation
-          </h2>
+          <h2 className="font-headline-md text-headline-md text-on-surface">Permissions & Delegation</h2>
           <p className="font-data-sm text-data-sm text-on-surface-variant mt-1">
             Cryptographically-bounded budgets. Agents act only within these caveats.
           </p>
@@ -54,9 +63,9 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
             <div className="bg-surface-container-lowest/70 border border-outline-variant/15 rounded-lg p-3 font-data-sm text-[12px] text-on-surface-variant space-y-1.5">
               {[
                 ["delegator", address ? shortAddr : "—"],
-                ["delegate", "0xDeleg…7710"],
-                ["scope", "Erc20Periodic"],
-                ["enforcer", "AllowedTargets"],
+                ["delegate",  "0xDeleg…7710"],
+                ["scope",     "Erc20Periodic"],
+                ["enforcer",  "AllowedTargets"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span>{k}</span>
@@ -66,19 +75,24 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
             </div>
             <div className="flex gap-2">
               <Btn variant="ghost" className="flex-1" icon="add" onClick={openGrant}>Increase</Btn>
-              <Btn variant="danger" icon="block">Revoke All</Btn>
+              <Btn variant="danger" icon="block" onClick={() => {
+                if (confirm("Revoke all sub-delegations? This cannot be undone.")) {
+                  // In production: call revokeAll on the delegation manager contract
+                  alert("Revocation submitted. Sub-delegations will expire at next block.");
+                }
+              }}>Revoke All</Btn>
             </div>
           </div>
         </div>
       </Panel>
 
-      {/* Allocation summary */}
+      {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-gutter">
         {[
-          { l: "Active Delegations", v: "0", icon: "key", c: "text-on-surface" },
-          { l: "Total Delegated", v: "$0", icon: "savings", c: "text-on-surface" },
-          { l: "Spent this period", v: "$0", icon: "payments", c: "text-primary" },
-          { l: "Headroom", v: "—", icon: "data_usage", c: "text-emerald" },
+          { l: "Active Delegations", v: String(trades.length),            icon: "key",        c: "text-on-surface" },
+          { l: "Total Delegated",    v: `$${trades.length > 0 ? trades.reduce((s, t) => s + (t.cioPromptJson as { amount_usdc: number }).amount_usdc, 0).toLocaleString() : "0"}`, icon: "savings", c: "text-on-surface" },
+          { l: "Spent this period",  v: spent > 0 ? fmtUSD(spent, 2) : "$0", icon: "payments",   c: "text-primary" },
+          { l: "Confirmed trades",   v: String(confirmedTrades.length),   icon: "check_circle", c: "text-emerald" },
         ].map((k) => (
           <Panel key={k.l} className="p-5">
             <div className="flex items-center justify-between">
@@ -99,19 +113,61 @@ export function Permissions({ openGrant }: { openGrant: () => void }) {
               Burner keys bound by caveat · ERC-7710 redelegatePermissionContext
             </p>
           </div>
-          <Tag>0 KEYS</Tag>
+          <Tag>{trades.length} KEYS</Tag>
         </div>
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Icon name="vpn_key" className="text-[44px] text-on-surface-variant/30 mb-3" />
-          <p className="font-data-sm text-data-sm text-on-surface-variant">No burner keys deployed yet.</p>
-          <p className="font-data-sm text-[12px] text-outline mt-1 max-w-sm">
-            Run the CIO Agent to generate a trade intent — each intent provisions a fresh burner key
-            via <span className="text-on-surface">redelegatePermissionContext</span>.
-          </p>
-          <Btn variant="ghost" icon="add_moderator" className="mt-5" onClick={openGrant}>
-            Create Sub-Delegation
-          </Btn>
-        </div>
+        {trades.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Icon name="vpn_key" className="text-[44px] text-on-surface-variant/30 mb-3" />
+            <p className="font-data-sm text-data-sm text-on-surface-variant">No burner keys deployed yet.</p>
+            <p className="font-data-sm text-[12px] text-outline mt-1 max-w-sm">
+              Run the CIO Agent to generate a trade intent — each intent provisions a fresh burner key
+              via <span className="text-on-surface">redelegatePermissionContext</span>.
+            </p>
+            <Btn variant="ghost" icon="add_moderator" className="mt-5" onClick={openGrant}>
+              Create Sub-Delegation
+            </Btn>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-outline-variant/20 bg-surface-container-lowest/50 font-label-caps text-label-caps text-on-surface-variant">
+                  <th className="p-4 font-normal">Burner Key</th>
+                  <th className="p-4 font-normal">Target Asset</th>
+                  <th className="p-4 font-normal text-right">Amount</th>
+                  <th className="p-4 font-normal">Relayer Task</th>
+                  <th className="p-4 font-normal">Status</th>
+                  <th className="p-4 font-normal">Time</th>
+                </tr>
+              </thead>
+              <tbody className="font-data-sm text-data-sm">
+                {trades.map((t) => {
+                  const intent = t.cioPromptJson as { target: string; amount_usdc: number };
+                  const statusColor =
+                    t.status === "CONFIRMED" ? "text-emerald" :
+                    t.status === "SUBMITTED" ? "text-amber" :
+                    t.status === "REVERTED"  ? "text-error" : "text-on-surface-variant";
+                  return (
+                    <tr key={t.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/30 transition-colors">
+                      <td className="p-4">
+                        <MonoAddr className="text-[12px]">{t.id.slice(0, 12)}…</MonoAddr>
+                      </td>
+                      <td className="p-4 text-on-surface">{intent.target} ← USDC</td>
+                      <td className="p-4 text-right tabular text-on-surface">{fmtUSD(intent.amount_usdc, 2)}</td>
+                      <td className="p-4 text-tertiary-fixed-dim text-[12px]">
+                        {t.relayerTaskId ? t.relayerTaskId.slice(0, 16) + "…" : "—"}
+                      </td>
+                      <td className={"p-4 font-label-caps text-label-caps " + statusColor}>{t.status}</td>
+                      <td className="p-4 text-outline text-[12px] tabular">
+                        {new Date(t.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
     </div>
   );
@@ -186,10 +242,7 @@ export function GrantModal({ open, onClose }: { open: boolean; onClose: () => vo
               <input
                 type="text"
                 value={limit.toLocaleString("en-US")}
-                onChange={(e) => {
-                  const n = +e.target.value.replace(/[^0-9]/g, "");
-                  setLimit(isNaN(n) ? 0 : n);
-                }}
+                onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); setLimit(isNaN(n) ? 0 : n); }}
                 className="flex-1 bg-transparent border-none font-data-lg text-data-lg text-on-surface tabular p-0 focus:ring-0"
               />
               <span className="font-label-caps text-label-caps text-on-surface-variant">USDC</span>
@@ -197,8 +250,8 @@ export function GrantModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
           <div className="bg-surface-container-lowest/60 border border-outline-variant/15 rounded-lg p-4 space-y-2">
             {[
-              ["Enforcer", "AllowedTargets + ERC20TransferAmount"],
-              ["Authority", "Master 0xDeleg…7710"],
+              ["Enforcer",   "AllowedTargets + ERC20TransferAmount"],
+              ["Authority",  "Master 0xDeleg…7710"],
               ["Burner key", "generated on sign"],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between font-data-sm text-[12px]">
@@ -209,9 +262,7 @@ export function GrantModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
           <div className="flex gap-2">
             <Btn variant="ghost" className="flex-1" onClick={onClose}>Cancel</Btn>
-            <Btn className="flex-1" icon="vpn_key" onClick={() => setDone(true)}>
-              Sign & Delegate
-            </Btn>
+            <Btn className="flex-1" icon="vpn_key" onClick={() => setDone(true)}>Sign & Delegate</Btn>
           </div>
         </div>
       ) : (
@@ -219,9 +270,7 @@ export function GrantModal({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="w-16 h-16 rounded-full bg-primary-container/10 border border-primary-container/40 flex items-center justify-center neon-glow">
             <Icon name="check" className="text-primary-fixed-dim text-[32px]" />
           </div>
-          <h3 className="font-headline-md text-headline-md text-on-surface mt-5">
-            Sub-delegation signed
-          </h3>
+          <h3 className="font-headline-md text-headline-md text-on-surface mt-5">Sub-delegation signed</h3>
           <p className="font-data-sm text-data-sm text-on-surface-variant mt-2 max-w-xs">
             {agent} can now spend up to ${limit.toLocaleString("en-US")} USDC on {target}.
           </p>

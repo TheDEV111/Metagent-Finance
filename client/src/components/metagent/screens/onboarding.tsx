@@ -14,7 +14,19 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
   const [error, setError] = useState<string | null>(null);
 
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Detected client-side after mount to avoid SSR hydration mismatch.
+  const [hasProvider, setHasProvider] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    setHasProvider(typeof window !== "undefined" && !!(window as { ethereum?: unknown }).ethereum);
+  }, []);
+
+  // Mobile browsers have no injected wallet — deep-link into the MetaMask app,
+  // which reopens this dapp in its in-app browser where the provider exists.
+  const metaMaskDeepLink =
+    typeof window !== "undefined"
+      ? `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`
+      : "https://metamask.io/download/";
 
   const { mutate: connect, isPending: connecting } = useConnect();
   const { mutate: disconnect } = useDisconnect();
@@ -149,6 +161,13 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
                     disabled={connecting}
                     onClick={() => {
                       setError(null);
+                      // No injected provider (typical on mobile browsers): hand off to
+                      // the MetaMask app, which reopens this dapp in its in-app browser
+                      // where window.ethereum exists and the injected connector works.
+                      if (!hasProvider) {
+                        window.location.href = metaMaskDeepLink;
+                        return;
+                      }
                       // mutate swallows errors into state — route them through onError.
                       // A user dismissing the wallet popup is expected, not a fault:
                       // log it and leave the UI untouched. Surface everything else.
@@ -179,18 +198,22 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
                         <Icon name="account_balance_wallet" className="text-primary-fixed-dim text-[20px]" />
                       )}
                     </span>
-                    <span className="flex-1">
-                      <span className="font-body-md text-on-surface block leading-tight">{connector.name}</span>
-                      <span className="font-data-sm text-[12px] text-on-surface-variant">
-                        {connecting ? "Connecting…" : "Smart Accounts ready"}
+                    <span className="flex-1 min-w-0">
+                      <span className="font-body-md text-on-surface block leading-tight truncate">{connector.name}</span>
+                      <span className="font-data-sm text-[12px] text-on-surface-variant block truncate">
+                        {connecting
+                          ? "Connecting…"
+                          : !hasProvider
+                          ? "Open in MetaMask app"
+                          : "Smart Accounts ready"}
                       </span>
                     </span>
                     {connector.id === "metaMask" && (
-                      <Tag className="text-primary-container border-primary-container/30">
+                      <Tag className="hidden sm:inline-flex text-primary-container border-primary-container/30 shrink-0">
                         RECOMMENDED
                       </Tag>
                     )}
-                    <Icon name="chevron_right" className="text-outline group-hover:text-on-surface" />
+                    <Icon name="chevron_right" className="text-outline group-hover:text-on-surface shrink-0" />
                   </button>
                 ))}
                 {mounted && walletConnectors.length === 0 && (

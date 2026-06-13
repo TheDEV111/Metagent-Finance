@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7df9ff"/>
+      <stop offset="0.45" stop-color="#00f0ff"/>
+      <stop offset="1" stop-color="#00b3c6"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16" result="b"/>
+      <feColorMatrix in="b" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0.94
+                0 0 0 0 1
+                0 0 0 0.85 0" result="cglow"/>
+      <feMerge>
+        <feMergeNode in="cglow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)">
+    <!-- Hexagon = the cryptographic permission boundary -->
+    <path d="M416,256 L336,394.6 L176,394.6 L96,256 L176,117.4 L336,117.4 Z" fill="url(#cyan)"/>
+    <!-- M monogram cut into the mark -->
+    <path d="M185,332 L185,180 L256,266 L327,180 L327,332"
+          fill="none" stroke="#0a0d13" stroke-width="32"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

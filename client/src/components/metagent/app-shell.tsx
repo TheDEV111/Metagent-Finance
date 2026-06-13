@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useDisconnect } from "wagmi";
 import { Icon, IconBtn } from "./primitives";
 import { Onboarding } from "./screens/onboarding";
 import { Dashboard } from "./screens/dashboard";
@@ -45,6 +46,19 @@ export function MetagentApp() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
+  const { mutateAsync: disconnectWallet } = useDisconnect();
+
+  // Full logout: tear down the wagmi connection *first*, otherwise Onboarding
+  // remounts while still connected and skips straight to the grant step.
+  // Awaiting disconnect closes the race where isConnected is briefly stale.
+  const handleDisconnect = async () => {
+    try { await disconnectWallet(); } catch { /* ignore — clearing local state regardless */ }
+    setConnected(false);
+    setUserId(null);
+    setWalletAddress(null);
+    localStorage.removeItem("mg_state");
+    localStorage.removeItem("mg_token");
+  };
 
   useEffect(() => {
     try {
@@ -137,7 +151,7 @@ export function MetagentApp() {
             <div className="font-data-sm text-[12px] text-on-surface-variant">2 agents · Base Mainnet</div>
           </div>
           <button
-            onClick={() => { setConnected(false); setUserId(null); setWalletAddress(null); localStorage.removeItem("mg_state"); }}
+            onClick={handleDisconnect}
             className="w-full bg-primary-container text-on-primary-container font-label-caps text-label-caps py-3 rounded font-bold flex justify-center items-center gap-2 hover:bg-primary-fixed transition-colors"
           >
             <Icon name="logout" className="text-[16px]" />
@@ -226,10 +240,7 @@ export function MetagentApp() {
                   onClose={() => setProfileOpen(false)}
                   onSettings={() => { setProfileOpen(false); nav("settings"); }}
                   onDisconnect={() => {
-                    setConnected(false);
-                    setUserId(null);
-                    setWalletAddress(null);
-                    localStorage.removeItem("mg_state");
+                    handleDisconnect();
                     setProfileOpen(false);
                   }}
                 />

@@ -16,11 +16,18 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const { mutate: connect } = useConnect();
+  const { mutate: connect, isPending: connecting } = useConnect();
   const { mutate: disconnect } = useDisconnect();
   const connectors = useConnectors();
   const { address, isConnected } = useConnection();
   const { data: walletClient } = useWalletClient();
+
+  // Prefer the MetaMask connector; fall back to any available connector so a
+  // wallet button always renders when one is injected.
+  const metaMaskConnectors = connectors.filter(
+    (c) => c.id === "metaMask" || c.name?.toLowerCase().includes("metamask")
+  );
+  const walletConnectors = metaMaskConnectors.length > 0 ? metaMaskConnectors : connectors;
 
   // After wallet connects, register user in DB and advance to step 1
   useEffect(() => {
@@ -136,18 +143,47 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
                 </p>
               )}
               <div className="space-y-3 mt-7 flex-1">
-                {mounted && connectors.filter((c) => c.id === "metaMask" || c.name?.toLowerCase().includes("metamask")).map((connector) => (
+                {mounted && walletConnectors.map((connector) => (
                   <button
                     key={connector.id}
-                    onClick={() => { setError(null); connect({ connector }); }}
-                    className="w-full flex items-center gap-3 p-4 rounded-lg bg-surface-container-lowest/60 border border-outline-variant/20 hover:border-primary-container/50 hover:bg-surface-container-high/50 transition-all text-left group"
+                    disabled={connecting}
+                    onClick={() => {
+                      setError(null);
+                      // mutate swallows errors into state — route them through onError.
+                      // A user dismissing the wallet popup is expected, not a fault:
+                      // log it and leave the UI untouched. Surface everything else.
+                      connect(
+                        { connector },
+                        {
+                          onError: (e) => {
+                            const rejected =
+                              e.name === "UserRejectedRequestError" ||
+                              (e as { code?: number }).code === 4001;
+                            if (rejected) {
+                              console.warn("Wallet connection rejected by user");
+                            } else {
+                              console.error("Wallet connection failed:", e);
+                              setError(e.message);
+                            }
+                          },
+                        }
+                      );
+                    }}
+                    className="w-full flex items-center gap-3 p-4 rounded-lg bg-surface-container-lowest/60 border border-outline-variant/20 hover:border-primary-container/50 hover:bg-surface-container-high/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="w-10 h-10 rounded bg-surface-container flex items-center justify-center border border-outline-variant/20 group-hover:border-primary-container/40">
-                      <Icon name="account_balance_wallet" className="text-primary-fixed-dim text-[20px]" />
+                    <span className="w-10 h-10 rounded bg-surface-container flex items-center justify-center border border-outline-variant/20 group-hover:border-primary-container/40 overflow-hidden">
+                      {connector.icon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={connector.icon} alt={connector.name} className="w-6 h-6" />
+                      ) : (
+                        <Icon name="account_balance_wallet" className="text-primary-fixed-dim text-[20px]" />
+                      )}
                     </span>
                     <span className="flex-1">
                       <span className="font-body-md text-on-surface block leading-tight">{connector.name}</span>
-                      <span className="font-data-sm text-[12px] text-on-surface-variant">Smart Accounts ready</span>
+                      <span className="font-data-sm text-[12px] text-on-surface-variant">
+                        {connecting ? "Connecting…" : "Smart Accounts ready"}
+                      </span>
                     </span>
                     {connector.id === "metaMask" && (
                       <Tag className="text-primary-container border-primary-container/30">
@@ -157,6 +193,23 @@ export function Onboarding({ onComplete }: { onComplete: (userId: string, wallet
                     <Icon name="chevron_right" className="text-outline group-hover:text-on-surface" />
                   </button>
                 ))}
+                {mounted && walletConnectors.length === 0 && (
+                  <a
+                    href="https://metamask.io/download/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-3 p-4 rounded-lg bg-surface-container-lowest/60 border border-outline-variant/20 hover:border-primary-container/50 transition-all text-left"
+                  >
+                    <span className="w-10 h-10 rounded bg-surface-container flex items-center justify-center border border-outline-variant/20">
+                      <Icon name="extension" className="text-primary-fixed-dim text-[20px]" />
+                    </span>
+                    <span className="flex-1">
+                      <span className="font-body-md text-on-surface block leading-tight">No wallet detected</span>
+                      <span className="font-data-sm text-[12px] text-on-surface-variant">Install MetaMask to continue</span>
+                    </span>
+                    <Icon name="open_in_new" className="text-outline" />
+                  </a>
+                )}
               </div>
               <p className="font-data-sm text-[12px] text-outline mt-6 flex items-center gap-1.5">
                 <Icon name="lock" className="text-[14px]" /> Non-custodial. Keys never leave your wallet.

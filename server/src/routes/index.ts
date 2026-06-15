@@ -256,7 +256,7 @@ router.post("/trade", requireAuth, async (req: Request, res: Response) => {
       }, 5000);
     }
 
-    res.json({ tradeId: trade.id, taskId: relayerTaskId ?? trade.id, intent });
+    res.json({ tradeId: trade.id, taskId: relayerTaskId ?? trade.id, intent, swapExecution });
   } catch (err) {
     console.error("[POST /api/trade]", err);
     res.status(500).json({ error: "Internal server error" });

@@ -230,6 +230,9 @@ function CIOTerminal({ className = "", onOpenAgents, userId }: { className?: str
         { t: ts(), kind: "INFO", text: "Market analysis complete." },
         { t: ts(), kind: "REASONING", text: `Target asset: ${(result.intent as { target: string }).target} · Amount: $${(result.intent as { amount_usdc: number }).amount_usdc.toLocaleString()} USDC` },
         { t: ts(), kind: "INTENT", text: JSON.stringify(result.intent) },
+        { t: ts(), kind: "HANDOFF", text: "→ Delegating bounded execution to Swap Agent" },
+        { t: ts(), kind: "SWAP", text: `Slippage ${result.swapExecution?.slippageBps ?? 50}bps · ${result.swapExecution?.reasoning ?? "optimizing route"}` },
+        { t: ts(), kind: "SIGN", text: "Burner key signed · caveat-bounded (AllowedTargets + ERC20)" },
         { t: ts(), kind: "RELAY", text: `Pushed to 1Shot relayer · task ${result.taskId}` },
       ]);
       setRunResult({ taskId: result.taskId, intent: result.intent as { target: string; amount_usdc: number } });
@@ -246,6 +249,9 @@ function CIOTerminal({ className = "", onOpenAgents, userId }: { className?: str
     REASONING: "text-primary-container",
     ACTION: "text-secondary-fixed-dim",
     INTENT: "text-amber",
+    HANDOFF: "text-secondary-fixed-dim",
+    SWAP: "text-emerald",
+    SIGN: "text-tertiary-fixed-dim",
     RELAY: "text-violet",
     ERROR: "text-error",
   };

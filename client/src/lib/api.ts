@@ -81,7 +81,12 @@ export async function updateUserProfile(
 
 export async function triggerTrade(
   userId: string
-): Promise<{ tradeId: string; taskId: string; intent: unknown }> {
+): Promise<{
+  tradeId: string;
+  taskId: string;
+  intent: unknown;
+  swapExecution?: { slippageBps: number; reasoning: string };
+}> {
   const webhookUrl = `${API}/api/webhook/1shot`;
   const res = await fetch(`${API}/api/trade`, {
     method: "POST",
